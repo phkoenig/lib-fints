@@ -159,3 +159,74 @@ describe('StatementInteractionCAMT with a parted response', () => {
 		expect(transactions).toHaveLength(2);
 	});
 });
+
+describe('several response segments in one bank message', () => {
+	it('resolves every portion, not just the first', async () => {
+		// Eine Botschaft mit ZWEI HICAZ-Segmenten. Vorher wurde nur das erste aufgeloest;
+		// das zweite blieb als PARTED im Baum und war fuer findAllSegments unsichtbar.
+		const answers = "HIRMG:3:2+0010::Entgegengenommen.+0020::Abfrage erfolgreich.'";
+		const message = Message.decode(
+			`${answers}${hicazText('<Doc>one</Doc>')}${hicazText('<Doc>two</Doc>')}`,
+			HICAZ.Id,
+		);
+		expect(message.findAllSegments('PARTED')).toHaveLength(2);
+
+		const dialog = new Dialog(
+			FinTSConfig.fromBankingInformation(
+				'PRODUCT',
+				'1.0',
+				{
+					systemId: 'X',
+					bankMessages: [],
+					bpd: {
+						version: 1,
+						bankId: '12030000',
+						bankName: 'Mock',
+						countryCode: 280,
+						url: 'http://mock.bank.url',
+						allowedTransactions: [{ transId: 'HKCAZ', tanRequired: false, versions: [1] }],
+						supportedTanMethods: [],
+						availableTanMethodIds: [],
+						maxTransactionsPerMessage: 1,
+						supportedLanguages: [],
+						supportedHbciVersions: [300],
+					},
+					// biome-ignore lint/suspicious/noExplicitAny: schlanker Mock
+				} as any,
+				'user',
+				'pin',
+			),
+		);
+
+		const request = new CustomerOrderMessage(HKCAZ.Id, HICAZ.Id);
+		request.addSegment({
+			header: { segId: HKCAZ.Id, segNr: 0, version: 1 },
+			account: { iban: 'DE991234567123456', bic: 'BANK12' },
+			acceptedCamtFormats: ['urn:iso:std:iso:20022:tech:xsd:camt.052.001.08'],
+			allAccounts: false,
+		} as HKCAZSegment);
+
+		// biome-ignore lint/suspicious/noExplicitAny: private Sammelroutine, absichtlich
+		await (dialog as any).handlePartedMessages(
+			request,
+			message,
+			new StatementInteractionCAMT('123'),
+		);
+
+		expect(message.findAllSegments('PARTED')).toHaveLength(0);
+		const segments = message.findAllSegments<HICAZSegment>(HICAZ.Id);
+		expect(segments).toHaveLength(2);
+		expect(segments.flatMap((s) => s.bookedTransactions)).toEqual([
+			'<Doc>one</Doc>',
+			'<Doc>two</Doc>',
+		]);
+	});
+
+	it('does not mistake a parameter segment for a response segment', () => {
+		// HIEKAS faengt an wie HIEKA. Ohne den Doppelpunkt im Vergleich waere es als
+		// PARTED zurueckgehalten und nie dekodiert worden.
+		const message = Message.decode("HIEKAS:4:5:4+1+1+0+J:N:J:1:3'", 'HIEKA');
+		expect(message.findAllSegments('PARTED')).toHaveLength(0);
+		expect(message.findAllSegments('HIEKAS')).toHaveLength(1);
+	});
+});
