@@ -4,6 +4,11 @@ import {
 	type AccountBalanceResponse,
 	BalanceInteraction,
 } from './interactions/balanceInteraction.js';
+import {
+	CamtStatementInteraction,
+	type CamtStatementOptions,
+	type CamtStatementResponse,
+} from './interactions/camtStatementInteraction.js';
 import { CreditCardStatementInteraction } from './interactions/creditcardStatementInteraction.js';
 import type {
 	ClientResponse,
@@ -24,6 +29,7 @@ import { StatementInteractionCAMT } from './interactions/statementInteractionCAM
 import { StatementInteractionMT940 } from './interactions/statementInteractionMT940.js';
 import { DKKKU } from './segments/DKKKU.js';
 import { HKCAZ } from './segments/HKCAZ.js';
+import { HKECA } from './segments/HKECA.js';
 import { HKEKA } from './segments/HKEKA.js';
 import { HKIDN } from './segments/HKIDN.js';
 import { HKKAZ } from './segments/HKKAZ.js';
@@ -338,6 +344,61 @@ export class FinTSClient {
 			tanReference,
 			tan,
 		)) as ElectronicStatementResponse;
+	}
+
+	/**
+	 * Checks if the bank supports fetching electronic account statements as camt.053
+	 * @param accountNumber when provided, checks the account instead of the bank as a whole
+	 * @returns true if the bank (and account) supports HKECA
+	 */
+	canGetCamtStatements(accountNumber?: string): boolean {
+		return accountNumber
+			? this.config.isAccountTransactionSupported(accountNumber, HKECA.Id)
+			: this.config.isTransactionSupported(HKECA.Id);
+	}
+
+	/**
+	 * Fetches an electronic account statement as a camt.053 message (Kontoauszug camt)
+	 *
+	 * The structured sibling of {@link getElectronicStatements}: same statement, but as a
+	 * camt message instead of a document. Prefer this where the bank offers it — a camt
+	 * message is read by this library's parser, a PDF needs a layout parser and a
+	 * self-check to prove it read every line.
+	 *
+	 * The bank hands out one statement per call and announces a waiting successor in
+	 * `nextOffset`; pass that value back in `options.offset` to fetch the next one. Banks
+	 * that set `receiptRequired` in their HIECAS parameters keep offering a statement
+	 * until it has been acknowledged — which is what makes a dry run safe: fetching
+	 * consumes nothing as long as no receipt is sent.
+	 *
+	 * @param accountNumber - the account to fetch for, must exist in config.bankingInformation.upd.accounts
+	 * @param options - optional camt formats, statement number and year, entry limit and offset
+	 * @returns a response containing the camt messages and the offset of a waiting successor
+	 */
+	async getCamtStatements(
+		accountNumber: string,
+		options?: CamtStatementOptions,
+	): Promise<CamtStatementResponse> {
+		return (await this.startCustomerOrderInteraction(
+			new CamtStatementInteraction(accountNumber, options),
+		)) as CamtStatementResponse;
+	}
+
+	/**
+	 * Continues the camt statement fetching when a TAN is required
+	 * @param tanReference The TAN reference provided in the first call's response
+	 * @param tan The TAN entered by the user, can be omitted if a decoupled TAN method is used
+	 * @returns a response containing the camt messages
+	 */
+	async getCamtStatementsWithTan(
+		tanReference: string,
+		tan?: string,
+	): Promise<CamtStatementResponse> {
+		return (await this.continueCustomerInteractionWithTan(
+			[HKECA.Id],
+			tanReference,
+			tan,
+		)) as CamtStatementResponse;
 	}
 
 	private async startCustomerOrderInteraction(

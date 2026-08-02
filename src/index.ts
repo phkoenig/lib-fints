@@ -7,6 +7,7 @@ export * from './bankAccount.js';
 export * from './bankAnswer.js';
 export * from './bankingInformation.js';
 export * from './bpd.js';
+export * from './camtStatement.js';
 export * from './client.js';
 export * from './config.js';
 export * from './dialog.js';
@@ -18,6 +19,10 @@ export {
 	ElectronicStatementOptions,
 	ElectronicStatementResponse,
 } from './interactions/electronicStatementInteraction.js';
+export {
+	CamtStatementOptions,
+	CamtStatementResponse,
+} from './interactions/camtStatementInteraction.js';
 export { PortfolioResponse } from './interactions/portfolioInteraction.js';
 export * from './message.js';
 export * from './mt535parser.js';
