@@ -416,15 +416,32 @@ export class CamtParser {
 					value: finalValue,
 				};
 
+				// BOOKED beats AVAILABLE. They are different numbers (available may
+				// exclude pending card holds — or, at HVB, arrive malformed:
+				// CLAV "339010600" next to CLBD "33901.06"). The old fall-through
+				// let whichever came LAST overwrite the other, so a CLAV placed
+				// after CLBD silently replaced the ledger balance and the
+				// statement's own chain check exploded by a factor of 10,000.
 				switch (typeCode) {
 					case 'PRCD': // Previous closing date
 					case 'OPBD': // Opening booked
-					case 'OPAV': // Opening available
 						openingBalance = balance;
 						break;
+					case 'OPAV': // Opening available — only if no booked one exists
+						if (!openingBalance) {
+							openingBalance = balance;
+						}
+						break;
 					case 'CLBD': // Closing booked
-					case 'CLAV': // Closing available
 						closingBalance = balance;
+						break;
+					case 'CLAV': // Closing available — fallback only, never an override
+						if (!closingBalance) {
+							closingBalance = balance;
+						}
+						if (!availableBalance) {
+							availableBalance = balance;
+						}
 						break;
 					case 'ITBD': // Interim booked
 					case 'ITAV': // Interim available

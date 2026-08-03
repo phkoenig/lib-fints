@@ -38,6 +38,20 @@ describe('CamtParser camt.053 (BkToCstmrStmt)', () => {
 		expect(statements[0].account).toBe('DE29100208900356357361');
 	});
 
+	it('CLAV after CLBD must NOT override the booked closing balance', () => {
+		// Verbatim quirk from the real statement of 2025-02-18: the bank sends
+		// CLBD 33901.06 followed by a malformed CLAV of 339010600 (no decimal
+		// point). The old fall-through switch let CLAV overwrite CLBD.
+		const quirk = camt053
+			.replace(
+				'<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="EUR">99.96</Amt><CdtDbtInd>DBIT</CdtDbtInd><Dt><Dt>2024-07-24</Dt></Dt></Bal>',
+				'<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="EUR">99.96</Amt><CdtDbtInd>DBIT</CdtDbtInd><Dt><Dt>2024-07-24</Dt></Dt></Bal>' +
+					'<Bal><Tp><CdOrPrtry><Cd>CLAV</Cd></CdOrPrtry></Tp><Amt Ccy="EUR">999600</Amt><CdtDbtInd>DBIT</CdtDbtInd><Dt><Dt>2024-07-24</Dt></Dt></Bal>',
+			)
+		const [s] = new CamtParser(quirk).parse()
+		expect(s.closingBalance?.value).toBe(-99.96)
+	})
+
 	it('keeps the official balances usable as anchors — the whole point of the fetch', () => {
 		const [s] = new CamtParser(camt053).parse();
 		expect(s.openingBalance?.value).toBe(-91.46); // DBIT ⇒ negative
