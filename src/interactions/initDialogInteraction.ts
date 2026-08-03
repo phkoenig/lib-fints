@@ -119,10 +119,23 @@ export class InitDialogInteraction extends CustomerInteraction {
 			let bankingUrl = this.config.bankingUrl;
 			const hikom = response.findSegment<HIKOMSegment>(HIKOM.Id);
 			if (hikom) {
-				bankingUrl = hikom?.comParams.address;
-				if (!bankingUrl.toLowerCase().startsWith('https://')) {
-					bankingUrl = `https://${bankingUrl}`;
+				// HIKOM may carry several communication accesses. Only service 3 is
+				// HTTPS (FinTS 3.0 Formals) and thus usable as the banking URL. HVB
+				// lists `2:hbci.hypovereinsbank.de` BEFORE `3:https://hbci-01…/bank/hbci`;
+				// taking the first entry blindly sent every follow-up dialog to a web
+				// portal, which answered with an HTML page instead of FinTS.
+				const comParamsList = Array.isArray(hikom.comParams)
+					? hikom.comParams
+					: [hikom.comParams];
+				const httpsAccess = comParamsList.find((p) => p && Number(p.service) === 3);
+				if (httpsAccess?.address) {
+					bankingUrl = httpsAccess.address;
+					if (!bankingUrl.toLowerCase().startsWith('https://')) {
+						bankingUrl = `https://${bankingUrl}`;
+					}
 				}
+				// No service-3 entry → keep the configured URL. It worked for this very
+				// dialog, so it beats guessing a protocol onto a non-HTTPS address.
 			}
 
 			const hipins = response.findSegment<HIPINSSegment>(HIPINS.Id);

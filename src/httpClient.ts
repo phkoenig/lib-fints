@@ -28,8 +28,21 @@ export class HttpClient {
 		});
 
 		if (response.ok) {
-			const responseBuffer = Buffer.from(await response.text(), 'base64');
+			const rawBody = await response.text();
+			const responseBuffer = Buffer.from(rawBody, 'base64');
 			const responseText = responseBuffer.toString('latin1');
+
+			// A FinTS response always starts with the HNHBK message head. Anything
+			// else (an HTML portal page, a load-balancer error) would base64-decode
+			// into garbage and surface as a misleading segment-parser error deep in
+			// the decoder. Fail loudly with the facts needed for a diagnosis instead.
+			if (!responseText.startsWith('HNHBK')) {
+				const contentType = response.headers.get('content-type') ?? 'unknown';
+				throw new Error(
+					`Bank did not answer with FinTS (content-type ${contentType}, url ${response.url}): ` +
+						rawBody.slice(0, 200),
+				);
+			}
 
 			try {
 				const customerOrderMessage = message as CustomerOrderMessage;

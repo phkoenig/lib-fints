@@ -10,7 +10,13 @@ import { SegmentDefinition } from '../segmentDefinition.js';
 export type HIKOMSegment = Segment & {
 	bankIdentification: Bank;
 	defaultLanguage: Language;
-	comParams: ComParams;
+	/**
+	 * Repeats once per offered communication access (FinTS 3.0 Formals: 1..9).
+	 * HVB sends TWO entries — service 2 first, the HTTPS one (service 3) second.
+	 * With maxCount 1 only the first survived decoding, and the client then
+	 * happily talked to a web portal instead of the FinTS endpoint.
+	 */
+	comParams: ComParams[];
 };
 
 export type ComParams = {
@@ -43,7 +49,7 @@ export class HIKOM extends SegmentDefinition {
 				new Numeric('filterVer', 0, 1, 3),
 			],
 			1,
-			1,
+			9,
 		),
 	];
 }
