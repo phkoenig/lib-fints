@@ -11,8 +11,13 @@ interface XMLDocument {
 }
 
 interface CamtDocument extends GenericXMLObject {
+	/** camt.052 — intraday account REPORTS */
 	BkToCstmrAcctRpt?: {
 		Rpt?: CamtReport | CamtReport[];
+	};
+	/** camt.053 — final booked STATEMENTS (same inner shape: Acct/Bal/Ntry) */
+	BkToCstmrStmt?: {
+		Stmt?: CamtReport | CamtReport[];
 	};
 }
 
@@ -237,26 +242,31 @@ export class CamtParser {
 		if (document.camt) {
 			return document.camt;
 		}
-		// Look for any object with BkToCstmrAcctRpt property
+		// Look for any object with a known CAMT payload property
 		for (const key in document) {
+			const kandidat = document[key] as CamtDocument;
 			if (
 				document[key] &&
 				typeof document[key] === 'object' &&
-				(document[key] as CamtDocument)?.BkToCstmrAcctRpt
+				(kandidat?.BkToCstmrAcctRpt || kandidat?.BkToCstmrStmt)
 			) {
-				return document[key] as CamtDocument;
+				return kandidat;
 			}
 		}
 		throw new CamtParsingError('No valid CAMT document structure found');
 	}
 
 	private getReports(docObj: CamtDocument): CamtReport[] {
-		const bkToCstmrAcctRpt = docObj.BkToCstmrAcctRpt;
-		if (!bkToCstmrAcctRpt) {
-			throw new CamtParsingError('No BkToCstmrAcctRpt element found in CAMT document');
+		// camt.052 (AcctRpt/Rpt) and camt.053 (Stmt/Stmt) share the inner shape —
+		// account, balances, entries. Only the wrapper differs. A parser that knows
+		// just one of them reads the other as "no valid structure", which is how
+		// HVB's HKECA statements (camt.053) were unreadable on 2026-08-03.
+		const rpt = docObj.BkToCstmrAcctRpt?.Rpt ?? docObj.BkToCstmrStmt?.Stmt;
+		if (!docObj.BkToCstmrAcctRpt && !docObj.BkToCstmrStmt) {
+			throw new CamtParsingError(
+				'Neither BkToCstmrAcctRpt (camt.052) nor BkToCstmrStmt (camt.053) found in CAMT document',
+			);
 		}
-
-		const rpt = bkToCstmrAcctRpt.Rpt;
 		if (!rpt) {
 			return [];
 		}
