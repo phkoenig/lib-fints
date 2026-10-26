@@ -2,3 +2,7 @@
 /node_modules
 .DS_Store
 .env
+
+# npm-pack-Ausgaben der vendorten Fork-Builds (megasync hetzner-banking/vendor), Quelle ist der Commit
+/lib-fints-*.tgz
+/lib-fints-*-src.tar.gz
